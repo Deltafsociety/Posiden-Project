@@ -11,6 +11,12 @@ import re
 # Set up logging for better error debugging
 logging.basicConfig(level=logging.INFO)
 
+# --- WARNING: HARDCODED API KEY ---
+# Replace "YOUR_API_KEY_HERE" with your actual OpenSanctions API key.
+# This is not a secure practice for production. For a more secure approach,
+# use environment variables.
+os_api_key = "YOUR_API_KEY_HERE"
+
 # Define the filename for our persistent data store
 ENTITIES_FILE = "entities.csv"
 
@@ -120,36 +126,6 @@ def clean_vessel_data(df):
     st.info(f"Loaded {initial_rows} rows. {len(df)} valid rows found after cleaning.")
     return df
 
-# --- AI Chat Functions ---
-def call_ai_api(api_key, chat_history):
-    """
-    Calls the Gemini API to generate a chat response.
-    """
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent"
-    headers = {
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "contents": [{"parts": [{"text": chat_history}]}]
-    }
-
-    try:
-        response = requests.post(url, headers=headers, json=payload, params={"key": api_key}, timeout=60)
-        response.raise_for_status()
-        result = response.json()
-        if result.get("candidates") and result["candidates"][0].get("content") and result["candidates"][0]["content"].get("parts"):
-            text = result["candidates"][0]["content"]["parts"][0]["text"]
-            return text
-        else:
-            return "Sorry, I couldn't generate a response. The API returned an unexpected format."
-    except requests.exceptions.HTTPError as e:
-        st.error(f"HTTP error occurred: {e}")
-        st.error("Please check your OpenAI API key and try again.")
-        return None
-    except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
-        return None
-
 # --- Streamlit App UI ---
 st.set_page_config(
     page_title="OpenSanctions Entity Checker",
@@ -161,17 +137,15 @@ st.title("OpenSanctions Entity Checker")
 st.markdown("Use this app to check a list of vessels, people, or companies against OpenSanctions data.")
 st.markdown("---")
 
-# API Key input in the sidebar
-st.sidebar.header("API Keys")
-st.sidebar.info("You can get a free OpenSanctions API key from [their website](https://www.opensanctions.org/api/) and a free Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey).")
-os_api_key = st.sidebar.text_input("OpenSanctions API key:", type="password", key="os_api_key")
-ai_api_key = st.sidebar.text_input("AI Assistant API key:", type="password", key="ai_api_key")
-
-if not os_api_key:
-    st.sidebar.warning("Please enter your OpenSanctions API key to use the checks.")
+# Initialize or load the entity list in session state
+if 'vessels_df' not in st.session_state:
+    if os.path.exists("vessels_data.csv"):
+        st.session_state.vessels_df = pd.read_csv("vessels_data.csv", dtype=str)
+    else:
+        st.session_state.vessels_df = pd.DataFrame(columns=['name', 'imoNumber'])
 
 # --- Tabbed interface for different search types ---
-tab1, tab2, tab3 = st.tabs(["Vessel Sanctions Check 🚢", "Person/Company Sanctions Check 👤🏢", "AI Chat Assistant 🤖"])
+tab1, tab2 = st.tabs(["Vessel Sanctions Check 🚢", "Person/Company Sanctions Check 👤🏢"])
 
 with tab1:
     st.header("Vessel Sanctions Check")
@@ -431,38 +405,3 @@ with tab2:
             elif not company_name:
                 st.warning("Please provide a company name to search.")
 
-with tab3:
-    st.header("AI Chat Assistant")
-    st.markdown("Use this assistant to ask questions about sanctions data, the OpenSanctions API, or any general queries.")
-    st.markdown("---")
-
-    if not ai_api_key:
-        st.warning("Please enter your AI Assistant API key in the sidebar to use the chat.")
-    else:
-        # Initialize chat history
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-
-        # Display chat messages from history on app rerun
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        # React to user input
-        if prompt := st.chat_input("What would you like to know?"):
-            # Display user message in chat message container
-            st.chat_message("user").markdown(prompt)
-            # Add user message to chat history
-            st.session_state.messages.append({"role": "user", "content": prompt})
-
-            # Call the AI API
-            with st.chat_message("assistant"):
-                message_placeholder = st.empty()
-                full_response = ""
-                response = call_ai_api(ai_api_key, prompt)
-                
-                if response:
-                    message_placeholder.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                else:
-                    message_placeholder.markdown("Sorry, I could not get a response from the AI assistant.")
