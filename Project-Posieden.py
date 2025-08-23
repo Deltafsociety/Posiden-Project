@@ -121,7 +121,7 @@ def clean_vessel_data(df):
     return df
 
 # --- AI Chat Functions ---
-async def call_ai_api(api_key, chat_history):
+def call_ai_api(api_key, chat_history):
     """
     Calls the Gemini API to generate a chat response.
     """
@@ -459,7 +459,7 @@ with tab3:
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 full_response = ""
-                response = await call_ai_api(ai_api_key, prompt) # Async call
+                response = call_ai_api(ai_api_key, prompt)
                 
                 if response:
                     message_placeholder.markdown(response)
