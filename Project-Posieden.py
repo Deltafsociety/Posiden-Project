@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 # Replace "YOUR_API_KEY_HERE" with your actual OpenSanctions API key.
 # This is not a secure practice for production. For a more secure approach,
 # use environment variables.
-os_api_key = "4180145222212c6b539d73e415745536"
+os_api_key = "489916971fe36cfcb04a1cec6b081ae6"
 
 # Define the filename for our persistent data store
 ENTITIES_FILE = "entities.csv"
