@@ -15,7 +15,64 @@ logging.basicConfig(level=logging.INFO)
 # Replace "YOUR_API_KEY_HERE" with your actual OpenSanctions API key.
 # This is not a secure practice for production. For a more secure approach,
 # use environment variables.
-os_api_key = "489916971fe36cfcb04a1cec6b081ae6"
+os_api_key = "fb7613c4e81c378bd80d96de3a6cbf45"
+
+# --- Human-readable sanction names and highlighting logic ---
+DATASET_MAP = {
+    'eu_fsf': 'EU Consolidated Sanctions List',
+    'gb_coh_sanctions': 'UK Company House Sanctions',
+    'au_dfat': 'Australia Consolidated List',
+    'ca_dfatd': 'Canada Consolidated List',
+    'ch_seco': 'Switzerland SECO Sanctions',
+    'eu_meps': 'EU Members of European Parliament',
+    'pl_mswia': 'Poland MSWiA',
+    'ru_fsfm': 'Russia Financial Monitoring Service',
+    'ua_nsdc': 'Ukraine National Security and Defense Council',
+    'uk_hmt': 'UK HM Treasury Sanctions List',
+    'un_sc': 'UN Security Council Sanctions',
+    'us_ofac_sdn': 'U.S. OFAC Specially Designated Nationals',
+    'us_ofac_non_sdn': 'U.S. OFAC Non-SDN Lists',
+    'us_sbi': 'U.S. State Department',
+    'amla_fin_cz': 'AML/CFT Financial Institutions (Czech Republic)',
+    'au_acsc': 'Australian Cyber Security Centre',
+    'au_paf': 'Australian Parliament',
+    'by_kgk': 'Belarus KGB Terrorist List',
+    'ca_peps': 'Canada PEPs List',
+    'ch_bafu': 'Switzerland BAFU (Environment)',
+    'ch_finma': 'Switzerland FINMA',
+    'cz_mfcr': 'Czech Ministry of Finance',
+    'eu_detentions': 'EU Detention Lists',
+    'gb_coh_disqualified': 'UK Company House Disqualified Directors',
+    'gb_hmt_detentions': 'UK Detention Lists',
+    'ie_cso': 'Ireland Central Statistics Office',
+    'il_mfa': 'Israel Ministry of Foreign Affairs',
+    'in_mha': 'India Ministry of Home Affairs',
+    'int_interpol': 'INTERPOL Red Notices',
+    'int_wipo': 'WIPO IP Enforcement',
+    'kg_minjust': 'Kyrgyzstan Ministry of Justice',
+    'lk_fiu': 'Sri Lanka FIU',
+    'my_fiu': 'Malaysia FIU',
+    'nz_dfat': 'New Zealand DFAT',
+    'pk_fiu': 'Pakistan FIU',
+    'ru_fsa': 'Russian Federal Security Service',
+    'ru_gost': 'Russian State Corporation',
+    'th_oicc': 'Thailand Anti-Corruption Commission',
+    'tr_tbmm': 'Turkey Grand National Assembly',
+    'ua_nazk': 'Ukraine NAZK',
+    'un_wco': 'World Customs Organization',
+    'us_cbp': 'U.S. Customs and Border Protection',
+    'us_cftc': 'U.S. Commodity Futures Trading Commission',
+    'us_fbi_wanted': 'U.S. FBI Most Wanted',
+    'us_fbi_terror': 'U.S. FBI Terrorist Watchlist',
+    'us_gsa': 'U.S. General Services Administration',
+    'us_medicaid': 'U.S. Medicaid Exclusions',
+    'us_treasury_detentions': 'U.S. Treasury Detention Lists',
+    'vn_mfa': 'Vietnam Ministry of Foreign Affairs',
+    'zz_detentions': 'Generic Detention List',
+    'zz_meps': 'Generic MEPs List',
+    'zz_peps': 'Generic PEPs List',
+    'zz_sanctions': 'Generic Sanctions List'
+}
 
 # Define the filename for our persistent data store
 ENTITIES_FILE = "entities.csv"
@@ -218,7 +275,7 @@ FAKHR 1 (SHARK52),9588639
             st.dataframe(st.session_state.vessels_to_check, use_container_width=True)
 
     if st.button("Check Vessels", key='check_vessels_button'):
-        if os_api_key:
+        if os_api_key != "YOUR_API_KEY_HERE":
             vessels_to_check_df = pd.DataFrame()
             if data_source == "Manage Stored Vessels":
                 vessels_to_check_df = st.session_state.vessels_df
@@ -247,9 +304,10 @@ FAKHR 1 (SHARK52),9588639
                     
                     response_data = check_sanctions_single(os_api_key, api_query)
                     
-                    is_sanctioned = False
+                    is_sanctioned_top_tier = False
+                    is_sanctioned_other = False
                     is_detained = False
-                    sanction_lists = "None"
+                    sanction_lists_human = "None"
                     match_score = "N/A"
                     sanctioned_id = "N/A"
                     
@@ -259,25 +317,38 @@ FAKHR 1 (SHARK52),9588639
                             best_match = response_for_entity["results"][0]
                             match_score = f"{best_match.get('score', 0):.2f}"
                             
+                            datasets_found = best_match.get("datasets", [])
+                            
                             if best_match.get("match") is True and best_match.get("score", 0) > 0.7:
-                                is_sanctioned = True
+                                top_tier_keywords = ['ofac', 'un', 'uk', 'eu']
+                                is_top_tier_match = any(any(keyword in ds for ds in datasets_found) for keyword in top_tier_keywords)
+                                
+                                if is_top_tier_match:
+                                    is_sanctioned_top_tier = True
+                                else:
+                                    is_sanctioned_other = True
+                                
                                 sanctioned_id = best_match.get("id", "N/A")
-                                sanction_lists = ", ".join(best_match.get("datasets", ["Unknown"]))
+                                human_names = [DATASET_MAP.get(ds, ds) for ds in datasets_found]
+                                sanction_lists_human = ", ".join(human_names)
                             
                             elif "topics" in best_match.get('properties', {}) and any('detention' in topic for topic in best_match['properties']['topics']):
                                 is_detained = True
                                 sanctioned_id = best_match.get("id", "N/A")
-                                sanction_lists = "Detention"
+                                sanction_lists_human = "Detention"
+                                
                             else:
-                                is_sanctioned = False
+                                is_sanctioned_top_tier = False
+                                is_sanctioned_other = False
                                 is_detained = False
                                 
                     results_df_data.append({
                         "Name": vessel["name"],
                         "IMO Number": vessel["imoNumber"],
-                        "Sanctioned": is_sanctioned,
+                        "Sanctioned": is_sanctioned_top_tier,
+                        "Other Sanction": is_sanctioned_other,
                         "Detention": is_detained,
-                        "Sanction Lists": sanction_lists,
+                        "Sanction Lists": sanction_lists_human,
                         "Match Score": match_score,
                         "OpenSanctions ID": sanctioned_id
                     })
@@ -292,8 +363,10 @@ FAKHR 1 (SHARK52),9588639
                 def highlight_sanctioned(row):
                     if row["Sanctioned"]:
                         return ['background-color: #ff0000; color: white'] * len(row)
+                    elif row["Other Sanction"]:
+                        return ['background-color: #ffff00; color: black'] * len(row)
                     elif row["Detention"]:
-                        return ['background-color: #ffff00'] * len(row)
+                        return ['background-color: #ffff00; color: black'] * len(row)
                     else:
                         return [''] * len(row)
                 
@@ -318,7 +391,7 @@ with tab2:
         name = st.text_input("Person's Name", key="person_name")
         
         if st.button("Check Person", key="check_person_button"):
-            if os_api_key and name:
+            if os_api_key != "YOUR_API_KEY_HERE" and name:
                 with st.spinner("Checking person against sanctions lists..."):
                     person_properties = {"name": [name]}
                     
@@ -336,11 +409,14 @@ with tab2:
                             best_match = response_for_person["results"][0]
                             is_sanctioned = best_match.get("match") is True and best_match.get("score", 0) > 0.7
                             
+                            datasets_found = best_match.get("datasets", [])
+                            human_names = [DATASET_MAP.get(ds, ds) for ds in datasets_found]
+                            sanction_lists_human = ", ".join(human_names)
+                            
                             if is_sanctioned:
                                 st.subheader("Match Found! 🔴")
-                                
                                 st.markdown("---")
-                                st.markdown(f"**Sanction Lists:** {', '.join(best_match.get('datasets', ['N/A']))}")
+                                st.markdown(f"**Sanction Lists:** {sanction_lists_human}")
                                 st.markdown("### All Match Details")
 
                                 properties_dict = best_match.get('properties', {})
@@ -365,7 +441,7 @@ with tab2:
         company_name = st.text_input("Company Name", key="company_name")
         
         if st.button("Check Company", key="check_company_button"):
-            if os_api_key and company_name:
+            if os_api_key != "YOUR_API_KEY_HERE" and company_name:
                 with st.spinner("Checking company against sanctions lists..."):
                     api_query = {
                         "schema": "Company",
@@ -381,11 +457,15 @@ with tab2:
                             best_match = response_for_company["results"][0]
                             is_sanctioned = best_match.get("match") is True and best_match.get("score", 0) > 0.7
 
+                            datasets_found = best_match.get("datasets", [])
+                            human_names = [DATASET_MAP.get(ds, ds) for ds in datasets_found]
+                            sanction_lists_human = ", ".join(human_names)
+
                             if is_sanctioned:
                                 st.subheader("Match Found! 🔴")
 
                                 st.markdown("---")
-                                st.markdown(f"**Sanction Lists:** {', '.join(best_match.get('datasets', ['N/A']))}")
+                                st.markdown(f"**Sanction Lists:** {sanction_lists_human}")
                                 st.markdown("### All Match Details")
 
                                 properties_dict = best_match.get('properties', {})
@@ -404,4 +484,3 @@ with tab2:
                             st.success("No match found on sanctions lists. ✅")
             elif not company_name:
                 st.warning("Please provide a company name to search.")
-
