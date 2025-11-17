@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 # Replace "YOUR_API_KEY_HERE" with your actual OpenSanctions API key.
 # This is not a secure practice for production. For a more secure approach,
 # use environment variables.
-os_api_key = "fb7613c4e81c378bd80d96de3a6cbf45"
+os_api_key = "9a4361111c8d360871ac5571988bbd58"
 
 # --- Human-readable sanction names and highlighting logic ---
 DATASET_MAP = {
