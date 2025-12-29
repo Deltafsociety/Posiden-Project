@@ -185,13 +185,13 @@ def clean_vessel_data(df):
 
 # --- Streamlit App UI ---
 st.set_page_config(
-    page_title="OpenSanctions Entity Checker",
+    page_title="POSEIDON Sanctions Checker",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.title("OpenSanctions Entity Checker")
-st.markdown("Use this app to check a list of vessels, people, or companies against OpenSanctions data.")
+st.title("POSEIDON Sanctions Checker | RCS")
+st.markdown("Use this app to check a list of vessels, people, or companies against Sanctions data.")
 st.markdown("---")
 
 # Initialize or load the entity list in session state
